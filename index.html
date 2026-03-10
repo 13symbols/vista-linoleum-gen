@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Генератор інформації</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    
+    /* Прихований блок для генерації PDF */
+    #hidden-pdf-source {
+        position: absolute;
+        left: -10000px;
+        top: 0;
+        visibility: hidden;
+    }
+
+    .a4-container {
+        width: 794px; /* A4 width at ~96dpi */
+        height: 1123px; /* A4 height at ~96dpi */
+        background: white;
+        padding: 40px 38px; 
+        box-sizing: border-box;
+    }
+
+    .cards-grid {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        gap: 0;
+    }
+
+    /* Стилі карток */
+    .a6-card {
+        width: 100%;
+        height: 100%;
+        border: 1px dashed #000;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: center;
+        padding: 0.75rem;
+        margin-right: -1px; 
+        margin-bottom: -1px;
+        background: white;
+    }
+
+    .single-preview-wrapper {
+        background-color: #f3f4f6;
+        border-radius: 0.75rem;
+        padding: 2rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 400px;
+    }
+
+    .single-card-container {
+        width: 380px;
+        height: 540px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        background: white;
+        transition: transform 0.2s;
+    }
+    
+    .spoiler-content { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out; }
+    .spoiler-content.open { max-height: 800px; }
+    .spoiler-dynamic-content { opacity: 0; transition: opacity 0.3s ease-in-out; }
+    .spoiler-dynamic-content.active { opacity: 1; }
+  </style>
+</head>
+<body class="bg-gray-100 p-4 min-h-screen">
+  
+  <div class="max-w-7xl mx-auto">
+    <div class="w-full text-center mb-8">
+      <h1 class="text-3xl md:text-4xl font-bold text-blue-800">Генератор інформації для лінолеуму</h1>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+      
+      <!-- ЛІВА КОЛОНКА -->
+      <div class="flex flex-col gap-6">
+
+        <!-- Адмінка: форма + кнопки в одному блоці -->
+        <div class="bg-white rounded-xl shadow p-6">
+          <div class="grid grid-cols-3 gap-6 items-start">
+
+            <!-- Ліва частина: управління (ширша) -->
+            <div class="col-span-2">
+              <h2 class="text-xl font-semibold text-blue-700 mb-5">Заповніть дані</h2>
+              <form id="productForm" class="space-y-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Виробник</label>
+                  <input id="manufacturer" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition" type="text" placeholder="Tarkett">
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Колекція</label>
+                  <input id="collection" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition" type="text" placeholder="Force">
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Товщина (мм)</label>
+                    <input id="thickness" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition" type="text" placeholder="2,5">
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Захист (мм)</label>
+                    <input id="protection" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition" type="text" placeholder="0,6">
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Вага (кг/м²)</label>
+                    <input id="weight" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none transition" type="text" placeholder="2,4">
+                  </div>
+                </div>
+              </form>
+              <div id="form-feedback" class="text-red-600 mt-3 text-sm font-medium min-h-[20px]"></div>
+            </div>
+
+            <!-- Права частина: кнопки (вужча) -->
+            <div class="col-span-1 flex flex-col gap-3 pt-10">
+              <button id="downloadPdfButton" class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white font-bold rounded-lg shadow hover:bg-blue-700 transition active:scale-95">
+                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                <span>Зберегти PDF</span>
+              </button>
+              <button id="openPdfButton" class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white font-bold rounded-lg shadow hover:bg-green-700 transition active:scale-95">
+                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                <span>Відкрити PDF</span>
+              </button>
+              <div class="border-t border-gray-100 pt-3 mt-1">
+                <button id="clearFormButton" class="w-full px-4 py-2 bg-gray-100 text-gray-600 font-semibold rounded-lg hover:bg-gray-200 transition text-sm">Очистити все</button>
+              </div>
+              <div id="form-error-message" class="text-red-600 text-sm text-center font-medium min-h-[20px]"></div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ПРАВА КОЛОНКА: Попередній перегляд -->
+      <div class="flex flex-col gap-6 sticky top-6">
+        <div class="bg-white shadow rounded-xl p-6">
+          <div class="flex justify-between items-center mb-6">
+            <h2 class="text-xl font-semibold text-blue-700">Попередній перегляд</h2>
+            <span class="text-xs font-medium bg-blue-100 text-blue-800 px-2 py-1 rounded">4 шт. на А4</span>
+          </div>
+          <div class="single-preview-wrapper">
+             <div id="singleCardPreview" class="single-card-container"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Футер зі спойлерами -->
+  <footer class="max-w-7xl mx-auto mt-8 pb-10">
+    <div class="bg-white shadow rounded-xl p-4">
+      <div class="space-y-3">
+        <div>
+          <button id="spoiler-trigger-1" class="w-full p-3 text-center px-4 font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex justify-center items-center transition">
+            <span>Інструкція з використання</span>
+          </button>
+          <div id="spoiler-content-1" class="text-sm spoiler-content">
+            <div class="spoiler-dynamic-content p-4 text-gray-600 leading-relaxed"></div>
+          </div>
+        </div>
+        <div>
+          <button id="spoiler-trigger-2" class="w-full p-3 text-center px-4 font-semibold rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex justify-center items-center transition">
+            <span>Згенерував Shans для Вiста</span>
+          </button>
+          <div id="spoiler-content-2" class="text-sm spoiler-content">
+            <div class="spoiler-dynamic-content p-4 text-gray-600 leading-relaxed"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+
+  <div id="hidden-pdf-source">
+    <div id="a4PreviewContainer" class="a4-container">
+        <div id="cardsGrid" class="cards-grid"></div>
+    </div>
+  </div>
+
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+        // --- Елементи DOM ---
+        const elements = {
+            form: document.getElementById('productForm'),
+            cardsGrid: document.getElementById('cardsGrid'),
+            pdfSource: document.getElementById('a4PreviewContainer'),
+            preview: document.getElementById('singleCardPreview'),
+            feedback: document.getElementById('form-feedback'),
+            errorMsg: document.getElementById('form-error-message'),
+            downloadBtn: document.getElementById('downloadPdfButton'),
+            openBtn: document.getElementById('openPdfButton'),
+            inputs: {
+                manufacturer: document.getElementById('manufacturer'),
+                collection: document.getElementById('collection'),
+                thickness: document.getElementById('thickness'),
+                protection: document.getElementById('protection'),
+                weight: document.getElementById('weight'),
+            },
+            clearBtn: document.getElementById('clearFormButton'),
+        };
+
+        // --- Основна логіка ---
+        function createCardHTML(data, isPdf) {
+           // Визначаємо значення
+           // Якщо поле порожнє — використовуємо дефолтні значення.
+           const tVal = data.thickness || '2,5';
+           const pVal = data.protection || '0,6';
+           const wVal = data.weight || '2,4';
+           const mVal = data.manufacturer || 'ВИРОБНИК';
+           const cVal = data.collection || 'КОЛЕКЦІЯ';
+           
+           // Допоміжна функція для кольору:
+           // Для PDF -> завжди чорний (#000000).
+           // Для попереднього перегляду -> якщо дефолтне значення — сірий (gray-400), якщо введено — чорний.
+           const getColor = (isDefault) => {
+               if (isPdf) return 'text-black';
+               return isDefault ? 'text-gray-400' : 'text-black';
+           };
+
+           // Визначаємо, чи є значення дефолтним, за порожнім рядком вводу.
+           // Для M та C перевіряємо по конкретних дефолтних рядках.
+           const mColor = getColor(mVal === 'ВИРОБНИК');
+           const cColor = getColor(cVal === 'КОЛЕКЦІЯ');
+           
+           // Для числових полів: якщо data.thickness — порожній рядок, використовується дефолт '2,5'.
+           const tColor = getColor(!data.thickness);
+           const pColor = getColor(!data.protection);
+           const wColor = getColor(!data.weight);
+           
+           return `
+            <div class="a6-card">
+              <div class="flex-grow flex flex-col justify-start text-center w-full">
+                <h1 class="text-4xl font-medium mb-4 ${mColor}">${mVal}</h1>
+                <h2 class="text-4xl font-bold mb-2 ${cColor}">${cVal}</h2>
+                <p class="text-4xl leading-tight mt-2">
+                  <span class="${tColor}">Товщина - ${tVal} мм</span><br>
+                  <span class="${pColor}">Захист - ${pVal} мм</span><br>
+                  <span class="${wColor}">Вага - ${wVal} кг/м²</span>
+                </p>
+              </div>
+            </div>
+          `;
+        }
+
+        function updatePreview() {
+          // Передаємо сирі рядки для числових полів, щоб знати, чи вони порожні.
+          // Для виробника та колекції дефолтне значення підставляється нижче.
+          
+          const rawM = elements.inputs.manufacturer.value.trim().toUpperCase();
+          const rawC = elements.inputs.collection.value.trim().toUpperCase();
+          const rawT = elements.inputs.thickness.value.trim();
+          const rawP = elements.inputs.protection.value.trim();
+          const rawW = elements.inputs.weight.value.trim();
+
+          const data = {
+            manufacturer: rawM || 'ВИРОБНИК',
+            collection: rawC || 'КОЛЕКЦІЯ',
+            thickness: rawT, // Порожній рядок, якщо поле не заповнено
+            protection: rawP,
+            weight: rawW,
+          };
+          
+          // Генерація попереднього перегляду (isPdf = false)
+          elements.preview.innerHTML = createCardHTML(data, false);
+          
+          // Генерація блоку для PDF (isPdf = true)
+          const pdfHtml = createCardHTML(data, true);
+          elements.cardsGrid.innerHTML = Array(4).fill(pdfHtml).join('');
+        }
+
+        // --- Обробники подій ---
+        elements.form.addEventListener('input', updatePreview);
+        elements.clearBtn.onclick = () => { elements.form.reset(); updatePreview(); };
+
+        // Валідація вводу (тільки цифри та кома)
+        [elements.inputs.thickness, elements.inputs.protection, elements.inputs.weight].forEach(input => {
+            input.addEventListener('input', (e) => {
+                let val = e.target.value.replace(/\./g, ',');
+                const clean = val.replace(/[^0-9,]/g, '');
+                if (val !== clean) {
+                    elements.feedback.textContent = 'Тільки цифри та коми';
+                    setTimeout(() => elements.feedback.textContent = '', 2000);
+                }
+                e.target.value = clean;
+            });
+        });
+
+        function validate() {
+            const valid = Object.values(elements.inputs).every(input => input.value.trim() !== '');
+            elements.errorMsg.textContent = valid ? '' : 'Будь ласка, заповніть усі поля';
+            return valid;
+        }
+
+        // --- Генерація PDF ---
+        async function generatePdf(open, btn) {
+          if (!validate() || btn.disabled) return;
+          
+          const originalText = btn.innerHTML;
+          btn.textContent = 'Обробка...';
+          btn.disabled = true;
+          
+          try {
+            const clone = elements.pdfSource.cloneNode(true);
+            clone.style.visibility = 'visible';
+            clone.style.position = 'static';
+            
+            const renderBox = document.createElement('div');
+            Object.assign(renderBox.style, { position: 'fixed', left: '-10000px', top: '0' });
+            renderBox.appendChild(clone);
+            document.body.appendChild(renderBox);
+
+            const canvas = await html2canvas(clone, { scale: 2, useCORS: true, logging: false });
+            document.body.removeChild(renderBox);
+
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+            pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 210, 297);
+            
+            const filename = `${elements.inputs.manufacturer.value || 'info'}.pdf`;
+            open ? window.open(pdf.output('bloburl')) : pdf.save(filename);
+          } catch (e) {
+            console.error(e);
+            elements.errorMsg.textContent = 'Помилка генерації PDF';
+          } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+          }
+        }
+
+        elements.downloadBtn.onclick = () => generatePdf(false, elements.downloadBtn);
+        elements.openBtn.onclick = () => generatePdf(true, elements.openBtn);
+
+        // --- Спойлери ---
+        const spoilerContent = {
+            'spoiler-content-1': `
+                <strong>Крок 1.</strong> Введіть назву виробника та колекцію у відповідні поля.<br><br>
+                <strong>Крок 2.</strong> Вкажіть технічні характеристики: товщину полотна, товщину захисного шару та вагу.<br><br>
+                <strong>Крок 3.</strong> Праворуч ви бачите попередній перегляд картки в реальному часі — перевірте, що всі дані введено вірно.<br><br>
+                <strong>Крок 4.</strong> Натисніть <em>«Зберегти PDF»</em> — файл завантажиться на ваш пристрій. Або <em>«Відкрити PDF»</em> — документ відкриється у новій вкладці.<br><br>
+                <strong>Примітка.</strong> PDF містить 4 однакові картки на аркуші А4 формату, розрізані по пунктирним лініям.
+            `,
+            'spoiler-content-2': `<div style="text-align:center">Згенеровано Shans для Вiста 💙</div>`
+        };
+
+        document.querySelectorAll('[id^="spoiler-trigger"]').forEach(btn => {
+            btn.onclick = () => {
+                const contentId = btn.id.replace('trigger', 'content');
+                const contentDiv = document.getElementById(contentId);
+                const inner = contentDiv.querySelector('div');
+
+                // Логіка перемикання
+                const isOpen = contentDiv.classList.contains('open');
+                document.querySelectorAll('.spoiler-content').forEach(el => {
+                    el.classList.remove('open');
+                    el.querySelector('div').classList.remove('active');
+                });
+
+                if (!isOpen) {
+                    inner.innerHTML = spoilerContent[contentId];
+                    contentDiv.classList.add('open');
+                    setTimeout(() => inner.classList.add('active'), 50);
+                }
+            };
+        });
+
+        // Ініціалізація
+        updatePreview();
+    });
+  </script>
+</body>
+</html>
